@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "momnasticism",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "momnasticism",
+      "database_id": "bd10c00c-feb2-4c2e-8799-2ba9ef3c921c",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "momnasticism-photos"
+    }
+  ],
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "joeldunnesq.cloudflareaccess.com",
+    "ACCESS_AUD": "1d2852d04c1e52d10f79116c0da407201dea97b39866a74fcdc0bca8b93c12dc",
+    "SITE_URL": "https://momnasticism.com"
+  },
+  "routes": [
+    {
+      "custom_domain": true,
+      "pattern": "momnasticism.com"
+    }
+  ]
+}

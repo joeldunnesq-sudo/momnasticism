@@ -1,0 +1,2 @@
+# LOCAL development only; never set this variable on the deployed Worker.
+LOCAL_DEV_AUTH=true

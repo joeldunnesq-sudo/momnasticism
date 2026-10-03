@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {markdown,safeUrl,slugify} from '../src/content';
+import {authorized,sameOrigin} from '../src/auth';
+const env={ACCESS_TEAM_DOMAIN:'',ACCESS_AUD:'',ADMIN_EMAILS:''};
+test('admin access fails closed without configuration or valid token',async()=>{assert.equal(await authorized(new Request('https://example.com/admin'),env),false);assert.equal(await authorized(new Request('https://example.com/admin',{headers:{'Cf-Access-Jwt-Assertion':'forged'}}),{...env,ACCESS_TEAM_DOMAIN:'example.cloudflareaccess.com',ACCESS_AUD:'test',ADMIN_EMAILS:'writer@example.com'}),false);});
+test('local bypass does not authorize a production host',async()=>{assert.equal(await authorized(new Request('https://example.com/admin'),{...env,LOCAL_DEV_AUTH:'true'}),false);assert.equal(await authorized(new Request('http://localhost:8787/admin'),{...env,LOCAL_DEV_AUTH:'true'}),true);});
+test('mutations need both exact origin and custom header',()=>{assert.equal(sameOrigin(new Request('https://example.com/api/admin/posts',{headers:{Origin:'https://evil.com','X-Momnasticism-Request':'1'}})),false);assert.equal(sameOrigin(new Request('https://example.com/api/admin/posts',{headers:{Origin:'https://example.com'}})),false);assert.equal(sameOrigin(new Request('https://example.com/api/admin/posts',{headers:{Origin:'https://example.com','X-Momnasticism-Request':'1'}})),true);});
+test('Markdown blocks raw script and dangerous links',()=>{assert.ok(!markdown('<script>alert(1)</script>').includes('<script>'));assert.ok(!markdown('[click](javascript:alert%281%29)').includes('href="javascript:'));assert.ok(!markdown('![photo](data:image/svg+xml,test)').includes('<img'));assert.ok(markdown('**hello**').includes('<strong>hello</strong>'));assert.ok(markdown('![safe](/media/abc.png)').includes('src="/media/abc.png"'));});
+test('URL and slug normalization',()=>{assert.equal(safeUrl('//evil.com'),'');assert.equal(safeUrl('javascript:alert(1)'),'');assert.equal(slugify('Holy Waiting & Little Feet!'),'holy-waiting-little-feet');});

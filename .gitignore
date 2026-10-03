@@ -1,0 +1,14 @@
+node_modules/
+.wrangler/
+dist/
+.dev.vars
+.env*
+*.zip
+
+.npm-cache/
+
+access-review.png
+site-preview.png
+favicon-preview.png
+
+.secrets.json
