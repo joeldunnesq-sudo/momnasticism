@@ -21,7 +21,7 @@ An Orthodox mother's journal, built around the approved ivory, olive, and dusty-
 - JSON export of posts, revisions, and photo inventory. Photo bytes require a separate R2 backup.
 - Automated GitHub checks and repeatable Cloudflare deployment.
 
-The public journal starts empty. About copy is a suggested draft based on the supplied story; review `src/views.ts` before launch. There is no email subscription form pretending to send messages: readers follow via RSS. Fonts load from Google Fonts; self-host if desired.
+The journal includes four editable sample entries from the approved mockup. The homepage subscription form connects to the MailerLite “Momnasticism readers” group using its public form endpoint and browser JSONP submission. Double opt-in is enabled in MailerLite; existing active readers do not need to reconfirm. Successful submissions open `/subscribe/check-email`. Automatic new-post emails require a separately configured MailerLite RSS campaign; signup success alone does not activate that campaign. Fonts load from Google Fonts; self-host if desired.
 
 ## Local development
 
