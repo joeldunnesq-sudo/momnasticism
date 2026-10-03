@@ -31,6 +31,10 @@
     {
       "custom_domain": true,
       "pattern": "momnasticism.com"
+    },
+    {
+      "pattern": "www.momnasticism.com",
+      "custom_domain": true
     }
   ]
 }
