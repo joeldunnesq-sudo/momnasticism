@@ -9,5 +9,10 @@
 - Created the approved Cloudflare Access application for the writer desk, previews, and admin API. The Worker verifies the Access JWT and independently checks a private email allowlist.
 - Confirmed the public homepage and coming-soon shop render in a browser. Homepage images load, canonical metadata is correct, and the desktop document does not overflow at 1440 pixels.
 - Confirmed /admin redirects to the correct Cloudflare email-code login screen. An authenticated production writing session still needs the owner to sign in.
-- Search Console property was available and the sitemap submission was accepted. Its initial read returned a fetch warning despite public HTTP 200 XML responses. A Google live URL inspection is being checked; indexing and rankings depend on Google.
+- Search Console property was available and the sitemap submission was accepted. Its initial read returned a fetch warning despite public HTTP 200 XML responses. Google live URL inspection confirmed that the homepage is available and can be indexed; Google accepted the homepage indexing request into its priority crawl queue. Indexing and rankings depend on Google.
+
+
+- All four supplied photographs are displayed on the homepage/About page using responsive JPEG copies without original EXIF metadata. Phone-width layout checked at 390 pixels without horizontal overflow.
+- The complete original supplied logo is displayed in the header, and the site has SVG/PNG favicons and an Apple touch icon.
+- www and trailing-slash URLs redirect permanently to the canonical URLs.
 
