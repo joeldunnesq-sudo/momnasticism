@@ -37,3 +37,5 @@ header{padding:10px 5%;gap:28px}
 .homepage-peony{display:block;width:160px;height:240px;object-fit:contain;pointer-events:none}
 .quote-copy{min-width:0}.peony-quote blockquote{margin-bottom:20px}
 @media(max-width:600px){.peony-quote{grid-template-columns:80px minmax(0,1fr);gap:20px;padding:32px 24px}.homepage-peony{width:80px;height:120px}.peony-quote blockquote{font-size:26px;line-height:1.2}.peony-quote figcaption{font-size:10px}}
+.build-credit{grid-column:1/-1;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-top:1px solid var(--line);padding-top:16px;margin-top:4px;font:12px/1.5 var(--sans);color:var(--muted)}
+.build-credit a{display:inline-flex;align-items:center;gap:7px;color:var(--olive)}.build-credit img{display:block;width:28px;height:30px;object-fit:contain}.build-credit a:hover{text-decoration:underline;text-underline-offset:3px}
