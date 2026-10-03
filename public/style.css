@@ -32,3 +32,8 @@ header{padding:10px 5%;gap:28px}
 @media(max-width:480px){.brand{width:302px;height:80px;gap:9px}.brand-mark{width:53px;height:80px;background-position:-65.6px -4.8px;background-size:184px auto}.brand-lettering{width:240px;height:53px;background-position:-18.4px -126.4px;background-size:280px auto}}
 
 .brand-lettering{clip-path:polygon(0 0,31% 0,31% 17%,72% 17%,72% 0,100% 0,100% 100%,0 100%)}
+/* A watercolor peony introduces the quiet reflection beneath the homepage hero. */
+.peony-quote{max-width:1080px;display:grid;grid-template-columns:160px minmax(0,1fr);align-items:center;gap:50px;padding:42px 35px;text-align:left}
+.homepage-peony{display:block;width:160px;height:240px;object-fit:contain;pointer-events:none}
+.quote-copy{min-width:0}.peony-quote blockquote{margin-bottom:20px}
+@media(max-width:600px){.peony-quote{grid-template-columns:80px minmax(0,1fr);gap:20px;padding:32px 24px}.homepage-peony{width:80px;height:120px}.peony-quote blockquote{font-size:26px;line-height:1.2}.peony-quote figcaption{font-size:10px}}
