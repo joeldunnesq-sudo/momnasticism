@@ -9,4 +9,5 @@
 - Created the approved Cloudflare Access application for the writer desk, previews, and admin API. The Worker verifies the Access JWT and independently checks a private email allowlist.
 - Confirmed the public homepage and coming-soon shop render in a browser. Homepage images load, canonical metadata is correct, and the desktop document does not overflow at 1440 pixels.
 - Confirmed /admin redirects to the correct Cloudflare email-code login screen. An authenticated production writing session still needs the owner to sign in.
-- Search Console verification/submission and Google indexing are separate from technical SEO implementation.
+- Search Console property was available and the sitemap submission was accepted. Its initial read returned a fetch warning despite public HTTP 200 XML responses. A Google live URL inspection is being checked; indexing and rankings depend on Google.
+
