@@ -44,7 +44,7 @@ async function route(req:Request,env:Env):Promise<Response>{
   if(data.status!=='draft'&&data.status!=='published')fail('Invalid entry status.');
   const slug=slugify(data.slug||data.title);if(!slug)fail('Enter a web address using letters or numbers.');
   if((data.body||'').length>100000||(data.excerpt||'').length>1000||(data.cover_alt||'').length>500)fail('Entry is too long.');
-  if(data.cover&&!/^\/media\/[a-f0-9-]+\.(jpg|png|webp|gif)$/.test(data.cover))fail('Upload a cover photo using the editor.');
+  if(data.cover&&!['/sample-covers/an-unexpected-cloister.jpg','/sample-covers/a-little-rule-of-prayer.jpg','/sample-covers/waiting-with-hope.jpg','/sample-covers/our-domestic-church.jpg'].includes(data.cover)&&!/^\/media\/[a-f0-9-]+\.(jpg|png|webp|gif)$/.test(data.cover))fail('Upload a cover photo using the editor.');
   const duplicate=await env.DB.prepare('SELECT id FROM posts WHERE slug=? AND id<>?').bind(slug,id).first();if(duplicate)fail('That web address is already in use.',409);
   if(old&&data.revision!==old.revision)fail('This entry changed in another tab. Reload before saving.',409);
   const category=data.category??old?.category??'Motherhood';const post_type=data.post_type??old?.post_type??'reflection';if(!categories.includes(category as typeof categories[number]))fail('Choose a journal category.');if(!['reflection','recipe','guide','photo-essay','poetry'].includes(post_type))fail('Choose a valid entry style.');
