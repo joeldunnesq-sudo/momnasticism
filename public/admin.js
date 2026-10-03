@@ -4,15 +4,19 @@ const fields=['title','slug','excerpt','body','cover','cover_alt','category','po
 let current=null,posts=[],dirty=false,timer,busy=false,epoch=0,previewEpoch=0;
 const recoveryKey=p=>'momnasticism-draft-'+(p?.id||'new');
 async function api(path,options={}){
- const response=await fetch('/api/admin/'+path,{...options,headers:{'X-Momnasticism-Request':'1',...(options.body&&typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers}});
- if(response.status===401){throw new Error('Your sign-in has expired. Copy your writing, then sign in again.');}
+ let response;
+ try{response=await fetch('/api/admin/'+path,{...options,credentials:'same-origin',redirect:'manual',headers:{'X-Momnasticism-Request':'1',...(options.body&&typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers}});}
+ catch{throw new Error('The connection was interrupted. Your writing is still in this editor. Reconnect your sign-in, then try saving again.');}
+ // Access redirects expired sessions to another origin. Do not follow that
+ // redirect in fetch: the browser blocks it and hides the useful auth error.
+ if(response.type==='opaqueredirect'||response.status===401){throw new Error('Your sign-in has expired. Your writing is still in this editor. Use Reconnect sign-in below, then return here and save again.');}
  let data;try{data=await response.json();}catch{throw new Error('Sign-in or server connection needs attention. Your local draft is retained.');}
  if(!response.ok)throw new Error(data.error||'The request failed.');return data;
 }
 function values(){return Object.fromEntries(fields.map(f=>[f,$(f).value]));}
 function recover(){try{localStorage.setItem(recoveryKey(current),JSON.stringify({...values(),saved:Date.now()}));}catch{$('save-status').textContent='This browser cannot keep a recovery copy. Save your draft before leaving.';}}
 function markDirty(){dirty=true;epoch++;recover();clearTimeout(timer);$('save-status').textContent=current?.status==='published'?'Changes kept on this device. Press Update live entry when ready.':'Saving draft shortly…';timer=setTimeout(()=>{if(current?.status!=='published'&&$('title').value.trim())save('draft').catch(showError);},1500);}
-function showError(error){$('save-status').textContent=error.message;$('message').textContent=error.message;}
+function showError(error){if(!$('editor').hidden)recover();$('save-status').textContent=error.message;$('message').textContent=error.message;$('connection-help').hidden=false;}
 function renderList(){const list=$('posts');list.replaceChildren();for(const p of posts){const b=document.createElement('button');b.className='post-choice'+(p.id===current?.id?' active':'');b.type='button';b.append(document.createTextNode(p.title));const s=document.createElement('small');s.textContent=p.status==='published'?'Published':'Draft';b.append(s);b.onclick=()=>openEntry(p);list.append(b);}}
 function setBusy(value){busy=value;for(const id of ['new','save','publish','unpublish','delete','photo','inline-photo','remove-cover'])$(id).disabled=value;document.querySelectorAll('.post-choice').forEach(b=>b.disabled=value);}
 function updateCover(){const img=$('cover-preview');img.hidden=!$('cover').value;if($('cover').value)img.src=$('cover').value;else img.removeAttribute('src');$('remove-cover').hidden=!$('cover').value;}
@@ -27,12 +31,12 @@ function openEntry(p=null){
 async function loadVersions(){const root=$('versions');root.replaceChildren();if(!current)return;const id=current.id;try{const versions=await api('posts/'+id+'/versions');if(current?.id!==id)return;for(const v of versions){const b=document.createElement('button');b.type='button';b.className='version text-link';b.textContent='Restore '+new Date(v.created_at).toLocaleString();b.onclick=()=>{if(busy||!confirm('Load this older version into the editor? Publish status will stay unchanged until you save.'))return;const old=JSON.parse(v.snapshot);for(const f of fields)$(f).value=old[f]||'';updateCover();markDirty();};root.append(b);}if(!versions.length)root.textContent='Saved versions will appear here.';}catch(error){root.textContent=error.message;}}
 async function save(status){
  if(busy)return false;if(!$('title').value.trim())throw new Error('Give your entry a title first.');
- clearTimeout(timer);setBusy(true);let succeeded=false;const before=epoch,oldKey=recoveryKey(current);const data={...values(),status,revision:current?.revision};
+ clearTimeout(timer);recover();setBusy(true);let succeeded=false;const before=epoch,oldKey=recoveryKey(current);const data={...values(),status,revision:current?.revision};
  try{const p=await api('posts'+(current?'/'+current.id:''),{method:current?'PUT':'POST',body:JSON.stringify(data)});current=p;$('id').value=p.id;
   if(epoch===before){dirty=false;localStorage.removeItem(oldKey);localStorage.removeItem(recoveryKey(p));$('slug').value=p.slug;}
   else{localStorage.removeItem(oldKey);recover();}
   posts=posts.filter(x=>x.id!==p.id);posts.unshift(p);renderList();$('publish').textContent=status==='published'?'Update live entry':'Publish entry';$('save').hidden=status==='published';$('unpublish').hidden=status!=='published';$('delete').hidden=false;
-  $('save-status').textContent=(dirty?'Saved. Newer changes are waiting to save.':status==='published'?'Published. Your entry is live.':'Draft saved · '+new Date().toLocaleTimeString());await loadVersions();succeeded=true;return true;
+  $('connection-help').hidden=true;$('save-status').textContent=(dirty?'Saved. Newer changes are waiting to save.':status==='published'?'Published. Your entry is live.':'Draft saved · '+new Date().toLocaleTimeString());await loadVersions();succeeded=true;return true;
  }finally{setBusy(false);if(succeeded&&dirty&&current?.status==='draft')timer=setTimeout(()=>save('draft').catch(showError),1500);}
 }
 $('editor').onsubmit=event=>event.preventDefault();$('editor').oninput=event=>{if(fields.includes(event.target.id))markDirty();};
