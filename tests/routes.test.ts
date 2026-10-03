@@ -51,3 +51,7 @@ test('recipe category persists, filters the journal, and uses the recipe layout'
  assert.match(await (await request('/journal/'+post.slug,'GET',undefined,true)).text(),/entry-recipe/);
  assert.equal((await request('/api/admin/posts','POST',{title:'Invalid',status:'draft',category:'Unknown'})).status,400);
 });
+
+test('poetry preserves verse spacing and escapes markup',async()=>{
+ const {request}=fixture();const response=await request('/api/admin/posts','POST',{title:'Quiet morning',body:'First line\nSecond line\n\n<script>unsafe</script>',status:'published',category:'Faith & Prayer',post_type:'poetry'});assert.equal(response.status,201);const post=await response.json() as any;const page=await (await request('/journal/'+post.slug,'GET',undefined,true)).text();assert.match(page,/class="poem">First line\nSecond line\n\n&lt;script&gt;/);assert.doesNotMatch(page,/<script>unsafe/);
+});
