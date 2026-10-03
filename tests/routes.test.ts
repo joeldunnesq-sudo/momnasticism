@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import worker from '../src/index';
 function fixture(){
- const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../migrations/0001_initial.sql',import.meta.url),'utf8'));
+ const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../migrations/0001_initial.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0002_post_categories.sql',import.meta.url),'utf8'));
  const prepare=(sql:string)=>{let args:unknown[]=[];const statement={bind(...a:unknown[]){args=a;return statement;},async first(){return db.prepare(sql).get(...args as never[])||null;},async all(){return {results:db.prepare(sql).all(...args as never[])};},async run(){const result=db.prepare(sql).run(...args as never[]);return {meta:{changes:Number(result.changes)}};}};return statement;};
  const objects=new Map();
  const env={DB:{prepare,async batch(statements:any[]){db.exec('BEGIN');try{const results=[];for(const statement of statements)results.push(await statement.run());db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},PHOTOS:{async put(key:string,body:any,metadata:any){objects.set(key,{body,...metadata});},async get(key:string){return objects.get(key)||null;}},ASSETS:{fetch:()=>new Response('not found',{status:404})},SITE_URL:'https://example.com',ACCESS_TEAM_DOMAIN:'',ACCESS_AUD:'',ADMIN_EMAILS:'',LOCAL_DEV_AUTH:'true'};
@@ -40,4 +40,14 @@ test('uploaded draft photos stay private until referenced by a published entry',
  p=await (await request('/api/admin/posts/'+p.id,'PUT',{...p,status:'published'})).json();assert.equal((await request(url,'GET',undefined,true)).status,200);
  await request('/api/admin/posts/'+p.id,'PUT',{...p,status:'draft'});assert.equal((await request(url,'GET',undefined,true)).status,404);
  const bad=await worker.fetch(new Request('http://localhost:8787/api/admin/upload',{method:'POST',headers:{Origin:'http://localhost:8787','X-Momnasticism-Request':'1'},body:'<svg onload="alert(1)"/>'}),env as any);assert.equal(bad.status,400);db.close();
+});
+
+test('recipe category persists, filters the journal, and uses the recipe layout',async()=>{
+ const {request}=fixture();
+ const response=await request('/api/admin/posts','POST',{title:'Family bread',body:'## Ingredients\n\n- Flour\n\n## Instructions\n\n1. Mix.',status:'published',category:'Recipes',post_type:'recipe'});
+ assert.equal(response.status,201);const post=await response.json() as any;assert.equal(post.category,'Recipes');assert.equal(post.post_type,'recipe');
+ assert.match(await (await request('/journal?category=Recipes','GET',undefined,true)).text(),/Family bread/);
+ assert.doesNotMatch(await (await request('/journal?category=Motherhood','GET',undefined,true)).text(),/Family bread/);
+ assert.match(await (await request('/journal/'+post.slug,'GET',undefined,true)).text(),/entry-recipe/);
+ assert.equal((await request('/api/admin/posts','POST',{title:'Invalid',status:'draft',category:'Unknown'})).status,400);
 });

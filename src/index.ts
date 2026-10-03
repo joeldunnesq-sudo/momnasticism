@@ -1,5 +1,5 @@
 import {authorized,sameOrigin,AuthEnv} from './auth';
-import {Post,escape as e,slugify,markdown} from './content';
+import {Post,categories,escape as e,slugify,markdown} from './content';
 import {home,journal,article,about,admin,shell,shop} from './views';
 interface Env extends AuthEnv {DB:D1Database;PHOTOS:R2Bucket;ASSETS:Fetcher;SITE_URL:string}
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -47,16 +47,17 @@ async function route(req:Request,env:Env):Promise<Response>{
   if(data.cover&&!/^\/media\/[a-f0-9-]+\.(jpg|png|webp|gif)$/.test(data.cover))fail('Upload a cover photo using the editor.');
   const duplicate=await env.DB.prepare('SELECT id FROM posts WHERE slug=? AND id<>?').bind(slug,id).first();if(duplicate)fail('That web address is already in use.',409);
   if(old&&data.revision!==old.revision)fail('This entry changed in another tab. Reload before saving.',409);
-  const now=new Date().toISOString();const p:Post={id,slug,title:data.title.trim(),excerpt:data.excerpt||'',body:data.body||'',cover:data.cover||'',cover_alt:data.cover_alt||'',status:data.status,created_at:old?.created_at||now,updated_at:now,published_at:data.status==='published'?(old?.published_at||now):null,revision:(old?.revision||0)+1};
+  const category=data.category??old?.category??'Motherhood';const post_type=data.post_type??old?.post_type??'reflection';if(!categories.includes(category as typeof categories[number]))fail('Choose a journal category.');if(!['reflection','recipe','guide','photo-essay'].includes(post_type))fail('Choose a valid entry style.');
+  const now=new Date().toISOString();const p:Post={category,post_type,id,slug,title:data.title.trim(),excerpt:data.excerpt||'',body:data.body||'',cover:data.cover||'',cover_alt:data.cover_alt||'',status:data.status,created_at:old?.created_at||now,updated_at:now,published_at:data.status==='published'?(old?.published_at||now):null,revision:(old?.revision||0)+1};
   const writes:D1PreparedStatement[]=[];if(old)writes.push(env.DB.prepare('INSERT INTO revisions(post_id,snapshot,created_at) VALUES(?,?,?)').bind(id,JSON.stringify(old),now));
-  if(old)writes.push(env.DB.prepare('UPDATE posts SET slug=?,title=?,excerpt=?,body=?,cover=?,cover_alt=?,status=?,updated_at=?,published_at=?,revision=? WHERE id=? AND revision=?').bind(p.slug,p.title,p.excerpt,p.body,p.cover,p.cover_alt,p.status,p.updated_at,p.published_at,p.revision,id,old.revision));
-  else writes.push(env.DB.prepare('INSERT INTO posts(id,slug,title,excerpt,body,cover,cover_alt,status,created_at,updated_at,published_at,revision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(p.id,p.slug,p.title,p.excerpt,p.body,p.cover,p.cover_alt,p.status,p.created_at,p.updated_at,p.published_at,p.revision));
+  if(old)writes.push(env.DB.prepare('UPDATE posts SET slug=?,title=?,excerpt=?,body=?,cover=?,cover_alt=?,status=?,updated_at=?,published_at=?,revision=?,category=?,post_type=? WHERE id=? AND revision=?').bind(p.slug,p.title,p.excerpt,p.body,p.cover,p.cover_alt,p.status,p.updated_at,p.published_at,p.revision,p.category,p.post_type,id,old.revision));
+  else writes.push(env.DB.prepare('INSERT INTO posts(id,slug,title,excerpt,body,cover,cover_alt,status,created_at,updated_at,published_at,revision,category,post_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(p.id,p.slug,p.title,p.excerpt,p.body,p.cover,p.cover_alt,p.status,p.created_at,p.updated_at,p.published_at,p.revision,p.category,p.post_type));
   const updateIndex=writes.length-1;writes.push(env.DB.prepare('DELETE FROM revisions WHERE post_id=? AND id NOT IN (SELECT id FROM revisions WHERE post_id=? ORDER BY id DESC LIMIT 30)').bind(id,id));const result=await env.DB.batch(writes);if(old&&!result[updateIndex].meta.changes)fail('This entry changed in another tab. Reload before saving.',409);return json(p,old?200:201);
  }
  const preview=path.match(/^\/admin\/preview\/([a-f0-9-]+)$/);if(preview&&req.method==='GET'){const p=await env.DB.prepare('SELECT * FROM posts WHERE id=?').bind(preview[1]).first<Post>();return p?html(article(p,true)):html(shell('Not found','<section class="entry"><h1>Entry not found</h1></section>'),404);}
  if(req.method!=='GET'&&req.method!=='HEAD')return json({error:'Method not allowed.'},405);
  if(path==='/')return html(home((await publicPosts(env)).slice(0,4)));
- if(path==='/journal')return html(journal(await publicPosts(env)));
+ if(path==='/journal'){const category=url.searchParams.get('category')||'';const posts=await publicPosts(env);return html(journal(category?posts.filter(p=>(p.category||'Motherhood')===category):posts,category));}
  if(path==='/about')return html(about());
  if(path==='/shop')return html(shop());
  if(path==='/sitemap.xml'){const base=env.SITE_URL.replace(/\/$/,'');const posts=await publicPosts(env);return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${['/','/journal','/about','/shop'].map(path=>`<url><loc>${e(base+path)}</loc></url>`).join('')}${posts.map(p=>`<url><loc>${e(base)}/journal/${e(p.slug)}</loc><lastmod>${e(p.updated_at)}</lastmod></url>`).join('')}</urlset>`,{headers:{'Content-Type':'application/xml; charset=utf-8'}});}
