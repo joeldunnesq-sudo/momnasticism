@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import worker from '../src/index';
 function fixture(){
  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../migrations/0001_initial.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0002_post_categories.sql',import.meta.url),'utf8'));
+ db.exec(readFileSync(new URL('../migrations/0003_pages.sql',import.meta.url),'utf8'));
  const prepare=(sql:string)=>{let args:unknown[]=[];const statement={bind(...a:unknown[]){args=a;return statement;},async first(){return db.prepare(sql).get(...args as never[])||null;},async all(){return {results:db.prepare(sql).all(...args as never[])};},async run(){const result=db.prepare(sql).run(...args as never[]);return {meta:{changes:Number(result.changes)}};}};return statement;};
  const objects=new Map();
  const env={DB:{prepare,async batch(statements:any[]){db.exec('BEGIN');try{const results=[];for(const statement of statements)results.push(await statement.run());db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},PHOTOS:{async put(key:string,body:any,metadata:any){objects.set(key,{body,...metadata});},async get(key:string){return objects.get(key)||null;}},ASSETS:{fetch:()=>new Response('not found',{status:404})},SITE_URL:'https://example.com',ACCESS_TEAM_DOMAIN:'',ACCESS_AUD:'',ADMIN_EMAILS:'',LOCAL_DEV_AUTH:'true'};
@@ -54,4 +55,33 @@ test('recipe category persists, filters the journal, and uses the recipe layout'
 
 test('poetry preserves verse spacing and escapes markup',async()=>{
  const {request}=fixture();const response=await request('/api/admin/posts','POST',{title:'Quiet morning',body:'First line\nSecond line\n\n<script>unsafe</script>',status:'published',category:'Faith & Prayer',post_type:'poetry'});assert.equal(response.status,201);const post=await response.json() as any;const page=await (await request('/journal/'+post.slug,'GET',undefined,true)).text();assert.match(page,/class="poem">First line\nSecond line\n\n&lt;script&gt;/);assert.doesNotMatch(page,/<script>unsafe/);
+});
+
+test('About page persistence, conflicts, validation, authentication, and backup',async()=>{
+ const {request,db}=fixture();
+ const original=await (await request('/api/admin/pages/about')).json() as any;
+ assert.equal(original.revision,0);
+ assert.match(await (await request('/about','GET',undefined,true)).text(),/Hello, I’m <em>Stephanie/);
+ assert.equal((await request('/api/admin/pages/about','GET',undefined,true)).status,401);
+ assert.equal((await request('/api/admin/pages/about','PUT',original,false,{Origin:'https://evil.com'})).status,403);
+ const changed={...original,content:{...original.content,intro:'A **new** biography. <script>bad()</script>',family_caption:'Our new family caption',quote_author:'A "quoted" author'}};
+ const response=await request('/api/admin/pages/about','PUT',changed);assert.equal(response.status,200);
+ const saved=await response.json() as any;assert.equal(saved.revision,1);
+ const page=await (await request('/about','GET',undefined,true)).text();assert.match(page,/<strong>new<\/strong>/);assert.match(page,/Our new family caption/);assert.doesNotMatch(page,/<script>bad/);assert.match(page,/&quot;quoted&quot;/);
+ assert.equal((await request('/api/admin/pages/about','PUT',original)).status,409);
+ assert.equal((await request('/api/admin/pages/about','PUT',{...saved,content:{...saved.content,portrait:'javascript:alert(1)'}})).status,400);
+ assert.equal((await request('/api/admin/pages/about','PUT',{...saved,content:{...saved.content,quote_url:'https://bad.test" onclick="bad()'}})).status,400);
+ assert.equal((await request('/api/admin/pages/about','PUT',{...saved,content:{...saved.content,intro:1}})).status,400);
+ const updated=await request('/api/admin/pages/about','PUT',{...saved,content:{...saved.content,portrait:''}});assert.equal(updated.status,200);
+ assert.doesNotMatch(await (await request('/about','GET',undefined,true)).text(),/class="author-photo"/);
+ const backup=await (await request('/api/admin/export')).json() as any;assert.equal(backup.pages.length,1);assert.equal(JSON.parse(backup.pages[0].content).family_caption,'Our new family caption');db.close();
+});
+
+test('About uploads are private before saving and after removal',async()=>{
+ const {request,env,db}=fixture();
+ const upload=await worker.fetch(new Request('http://localhost:8787/api/admin/upload',{method:'POST',headers:{Origin:'http://localhost:8787','X-Momnasticism-Request':'1'},body:new Uint8Array([137,80,78,71,13,10,26,10])}),env as any);
+ const {url}=await upload.json() as any;assert.equal((await request(url,'GET',undefined,true)).status,404);
+ let page=await (await request('/api/admin/pages/about')).json() as any;page.content.family=url;
+ page=await (await request('/api/admin/pages/about','PUT',page)).json();assert.equal((await request(url,'GET',undefined,true)).status,200);
+ page.content.family='';await request('/api/admin/pages/about','PUT',page);assert.equal((await request(url,'GET',undefined,true)).status,404);db.close();
 });

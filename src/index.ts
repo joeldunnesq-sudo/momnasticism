@@ -1,3 +1,4 @@
+import {aboutDefaults,aboutFields,AboutContent,loadAbout} from './pages';
 import {authorized,sameOrigin,AuthEnv} from './auth';
 import {Post,categories,escape as e,slugify,markdown} from './content';
 import {home,journal,article,about,admin,shell,shop} from './views';
@@ -15,8 +16,25 @@ async function route(req:Request,env:Env):Promise<Response>{
  if(protectedRoute){if(!await authorized(req,env))return path.startsWith('/api/')?json({error:'Admin sign-in required.'},401):html(shell('Admin sign-in','<section class="entry"><h1>Writer’s desk</h1><p>Admin access is protected by Cloudflare Access. Configure the email allowlist and application settings described in the README before signing in.</p><a href="/">Return home</a></section>'),401);if(!['GET','HEAD'].includes(req.method)&&!sameOrigin(req))return json({error:'Request origin rejected.'},403);}
  if(path==='/subscribe/check-email'&&req.method==='GET')return html(shell('Check your email','<section class="entry"><div class="eyebrow">Letters from the little cloister</div><h1>A little letter is on its way.</h1><p>Check your inbox for a confirmation email and follow its link to join Momnasticism. If you have already subscribed, you’re all set.</p><p>If you don’t see it, check your spam folder.</p><a class="button" href="/journal">Explore the journal →</a></section>',false,{noindex:true}));
  if(req.method==='GET'&&path==='/admin')return html(admin());
+ if(path==='/api/admin/pages/about'&&req.method==='GET')return json(await loadAbout(env.DB));
+ if(path==='/api/admin/pages/about'&&req.method==='PUT'){
+  const data=await req.json() as {content?:AboutContent;revision?:number};
+  if(!data.content||typeof data.content!=='object'||!Number.isInteger(data.revision)||data.revision!<0)fail('Valid page content and revision required.');
+  const content={...aboutDefaults};
+  for(const f of aboutFields){const value=data.content[f.key];if(typeof value!=='string'||value.length>(f.kind==='markdown'?20000:2000))fail('Invalid '+f.label+'.');
+   if(f.kind==='photo'&&value!==''&&value!==aboutDefaults[f.key]&&!/^\/media\/[a-f0-9-]+\.(jpg|png|webp|gif)$/.test(value))fail('Upload photos using this editor.');
+   if(f.kind==='url'&&value&&!/^https:\/\/[^\s]+$/.test(value))fail('Use an HTTPS quote source URL.');
+   content[f.key]=value;
+  }
+  const now=new Date().toISOString();
+  const result=data.revision===0
+   ?await env.DB.prepare("INSERT INTO pages(id,content,revision,updated_at) VALUES('about',?,1,?) ON CONFLICT(id) DO NOTHING").bind(JSON.stringify(content),now).run()
+   :await env.DB.prepare("UPDATE pages SET content=?,revision=revision+1,updated_at=? WHERE id='about' AND revision=?").bind(JSON.stringify(content),now,data.revision).run();
+  if(!result.meta.changes)fail('This page changed in another tab. Reload before saving.',409);
+  return json({content,revision:data.revision!+1});
+ }
  if(path==='/api/admin/posts'&&req.method==='GET')return json((await env.DB.prepare('SELECT * FROM posts ORDER BY updated_at DESC').all<Post>()).results);
- if(path==='/api/admin/export'&&req.method==='GET'){const data={version:1,exported_at:new Date().toISOString(),posts:(await env.DB.prepare('SELECT * FROM posts').all()).results,revisions:(await env.DB.prepare('SELECT * FROM revisions').all()).results,media:(await env.DB.prepare('SELECT * FROM media').all()).results};const res=json(data);res.headers.set('Content-Disposition','attachment; filename="momnasticism-backup.json"');return res;}
+ if(path==='/api/admin/export'&&req.method==='GET'){const data={version:2,pages:(await env.DB.prepare('SELECT * FROM pages').all()).results,exported_at:new Date().toISOString(),posts:(await env.DB.prepare('SELECT * FROM posts').all()).results,revisions:(await env.DB.prepare('SELECT * FROM revisions').all()).results,media:(await env.DB.prepare('SELECT * FROM media').all()).results};const res=json(data);res.headers.set('Content-Disposition','attachment; filename="momnasticism-backup.json"');return res;}
  if(path==='/api/admin/preview'&&req.method==='POST'){const data=await req.json() as {body?:unknown};return json({html:markdown(String(data.body||'').slice(0,100000))});}
  if(path==='/api/admin/upload'&&req.method==='POST'){
   const length=Number(req.headers.get('Content-Length'));if(length>10*1024*1024)fail('Photo must be smaller than 10 MB.',413);
@@ -28,7 +46,8 @@ async function route(req:Request,env:Env):Promise<Response>{
  if(path.startsWith('/media/')&&req.method==='GET'){
   const key=path.slice(7);if(!/^[a-f0-9-]+\.(jpg|png|gif|webp)$/.test(key))fail('Not found.',404);
   const referenced=await env.DB.prepare("SELECT id FROM posts WHERE status='published' AND (cover=? OR instr(body,?)>0) LIMIT 1").bind(path,path).first();
-  if(!referenced&&!await authorized(req,env))fail('Not found.',404);
+  const page=await loadAbout(env.DB);const pagePhoto=aboutFields.some(f=>f.kind==='photo'&&page.content[f.key]===path);
+  if(!referenced&&!pagePhoto&&!await authorized(req,env))fail('Not found.',404);
   const object=await env.PHOTOS.get(key);if(!object)fail('Not found.',404);return new Response(object.body,{headers:{'Content-Type':object.httpMetadata?.contentType||'application/octet-stream','Cache-Control':'private, no-store'}});
  }
  const versions=path.match(/^\/api\/admin\/posts\/([a-f0-9-]+)\/versions$/);
@@ -59,7 +78,7 @@ async function route(req:Request,env:Env):Promise<Response>{
  if(req.method!=='GET'&&req.method!=='HEAD')return json({error:'Method not allowed.'},405);
  if(path==='/')return html(home((await publicPosts(env)).slice(0,4)));
  if(path==='/journal'){const category=url.searchParams.get('category')||'';const posts=await publicPosts(env);return html(journal(category?posts.filter(p=>(p.category||'Motherhood')===category):posts,category));}
- if(path==='/about')return html(about());
+ if(path==='/about')return html(about((await loadAbout(env.DB)).content));
  if(path==='/shop')return html(shop());
  if(path==='/sitemap.xml'){const base=env.SITE_URL.replace(/\/$/,'');const posts=await publicPosts(env);return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${['/','/journal','/about','/shop'].map(path=>`<url><loc>${e(base+path)}</loc></url>`).join('')}${posts.map(p=>`<url><loc>${e(base)}/journal/${e(p.slug)}</loc><lastmod>${e(p.updated_at)}</lastmod></url>`).join('')}</urlset>`,{headers:{'Content-Type':'application/xml; charset=utf-8'}});}
  const entry=path.match(/^\/journal\/([a-z0-9-]+)$/);if(entry){const p=await env.DB.prepare("SELECT * FROM posts WHERE slug=? AND status='published'").bind(entry[1]).first<Post>();return p?html(article(p)):html(shell('Not found','<section class="entry"><h1>Entry not found</h1><a href="/journal">Visit the journal</a></section>'),404);}

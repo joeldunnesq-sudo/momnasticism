@@ -56,3 +56,25 @@ window.addEventListener('beforeunload',event=>{if(dirty){recover();event.prevent
 api('posts').then(data=>{posts=data;renderList();$('message').textContent='A quiet place to write. Drafts stay private until you publish.';}).catch(showError);
 
 $('entry-template').onclick=()=>{const outlines={poetry:'A first line\nA second line\n\nA new stanza\n\n',recipe:'## The story behind this recipe\n\n\n## At a glance\n\n- Servings: \n- Prep time: \n- Cook time: \n\n## Ingredients\n\n- \n\n## Instructions\n\n1. \n\n## Notes and variations\n\n',guide:'## What helped\n\n\n## What you will need\n\n- \n\n## Step by step\n\n1. \n\n## A gentle reminder\n\n', 'photo-essay':'## A moment worth remembering\n\n\n## The little details\n\n',reflection:'## A moment from today\n\n\n## What I am learning\n\n'};if($('body').value.trim()&&!confirm('Append a writing outline to this entry?'))return;$('body').value+='\n'+outlines[$('post_type').value];if($('post_type').value==='recipe')$('category').value='Recipes';markDirty();};
+
+// About page changes remain local until the writer explicitly saves them.
+const aboutForm=$('about-editor'),aboutPanel=aboutForm.closest('details');
+let aboutRevision=0,aboutLoaded=false,aboutDirty=false,aboutBusy=false;
+const aboutInputs=()=>Array.from(aboutForm.querySelectorAll('#about-fields textarea, #about-fields input[type="hidden"]'));
+const aboutValues=()=>Object.fromEntries(aboutInputs().map(input=>[input.id.slice(6),input.value]));
+function aboutPhotos(){for(const img of aboutForm.querySelectorAll('.page-photo-preview')){const input=$(img.id.replace('-preview',''));img.hidden=!input.value;if(input.value)img.src=input.value;else img.removeAttribute('src');}}
+function aboutRecover(){try{localStorage.setItem('momnasticism-about-recovery',JSON.stringify({content:aboutValues(),revision:aboutRevision}));}catch{$('about-status').textContent='This browser cannot keep a recovery copy. Save before leaving.';}}
+function aboutChanged(){aboutDirty=true;aboutRecover();$('about-status').textContent='Unsaved changes. Press Save About page to update the live page.';aboutPhotos();}
+function aboutLock(value){aboutBusy=value;for(const input of aboutForm.querySelectorAll('input,textarea,button'))input.disabled=value;}
+function aboutError(error){$('about-status').textContent=error.message;$('connection-help').hidden=false;}
+aboutPanel.addEventListener('toggle',async()=>{
+ if(!aboutPanel.open||aboutLoaded||aboutBusy)return;aboutLock(true);$('about-status').textContent='Loading About page…';
+ try{const data=await api('pages/about');aboutRevision=data.revision;for(const input of aboutInputs())input.value=data.content[input.id.slice(6)]||'';aboutLoaded=true;aboutPhotos();$('about-status').textContent='Ready to edit. Changes go live only when you save.';
+  try{const local=JSON.parse(localStorage.getItem('momnasticism-about-recovery')||'null');if(local&&Object.keys(aboutValues()).some(key=>local.content[key]!==data.content[key])&&confirm('Restore your unsaved About page changes from this device?')){for(const input of aboutInputs())input.value=local.content[input.id.slice(6)]||'';aboutChanged();if(local.revision!==data.revision){aboutRevision=local.revision;$('about-status').textContent='Recovery restored, but the live page has changed. Copy your edits, reload, and reapply them before saving.';}}}catch{}
+ }catch(error){aboutError(error);}finally{aboutLock(false);}
+});
+aboutForm.addEventListener('input',event=>{if(event.target.matches('textarea'))aboutChanged();});
+for(const button of aboutForm.querySelectorAll('[data-remove-photo]'))button.onclick=()=>{if(aboutBusy||!aboutLoaded)return;$('about-'+button.dataset.removePhoto).value='';aboutChanged();};
+for(const input of aboutForm.querySelectorAll('input[type="file"]'))input.onchange=async()=>{if(aboutBusy||!aboutLoaded)return;aboutLock(true);try{$('about-status').textContent='Uploading photo…';const data=await upload(input.files[0]);if(data){$(input.id.replace('-upload','')).value=data.url;aboutChanged();}}catch(error){aboutError(error);}finally{input.value='';aboutLock(false);}};
+aboutForm.onsubmit=async event=>{event.preventDefault();if(aboutBusy||!aboutLoaded)return;aboutRecover();aboutLock(true);try{const data=await api('pages/about',{method:'PUT',body:JSON.stringify({content:aboutValues(),revision:aboutRevision})});aboutRevision=data.revision;aboutDirty=false;try{localStorage.removeItem('momnasticism-about-recovery');}catch{}$('about-status').textContent='About page saved. Your changes are live.';}catch(error){aboutError(error);}finally{aboutLock(false);}};
+window.addEventListener('beforeunload',event=>{if(aboutDirty){aboutRecover();event.preventDefault();event.returnValue='';}});

@@ -12,6 +12,7 @@ An Orthodox mother's journal, built around the approved ivory, olive, and dusty-
 
 ## Included
 
+- About page editor for all four photos, accessibility descriptions, biography, story, quote/source, caption, and button text; explicit live saves, local recovery, and conflict detection.
 - Responsive homepage, journal archive, individual entries, About Stephanie, RSS feed.
 - Private `/admin` writer's desk with Cloudflare Access email sign-in.
 - Markdown editor with formatting buttons, inline images, cover images, alt text, and preview.
@@ -115,7 +116,9 @@ npx wrangler d1 export momnasticism --remote --output=backup.sql
 ## Editing the design
 
 - `public/style.css`: palette, fonts, responsive layout.
-- `src/views.ts`: homepage and About copy.
+- Writer’s desk → **Edit About page**: edit About text and replace/remove photos without a code deployment.
+- `src/pages.ts`: initial About content defaults.
+- `src/views.ts`: page layouts and homepage copy.
 - `public/logo.png`: approved feminine logo on a transparent background.
 - `public/hero.png`: matching generated editorial still life.
 - `public/admin.js`: editor workflow.
@@ -124,3 +127,7 @@ npx wrangler d1 export momnasticism --remote --output=backup.sql
 
 The image concept is recreated with real responsive HTML; lettering uses Cormorant Garamond as a practical approximation of the generated design. The generated logo itself is preserved.
 
+
+## About page editor rollout
+
+Apply migration `0003_pages.sql` with `npm run db:remote` before deploying this change. The existing About text and photos remain the defaults until the first admin save. Page content is stored in D1 and included in Download backup; uploaded photo bytes remain in R2. Photos become public only after the page is saved with them and become private again when no live page or entry references them.
